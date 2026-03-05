@@ -49,9 +49,10 @@ COPY --from=py-builder /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 ENV OPENVIKING_CONFIG_FILE="/app/ov.conf"
 
-# Entrypoint: generates /app/ov.conf from environment variables at startup
+# Entrypoint: generates /app/ov.conf from environment variables at startup.
+# Strip Windows CRLF line endings before making executable.
 COPY docker-entrypoint-server.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+RUN sed -i 's/\r$//' /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
 
 RUN mkdir -p /app/data
 
