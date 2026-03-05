@@ -1,0 +1,69 @@
+FROM python:3.13-slim-bookworm
+
+# Install system deps: Node.js 20, uv, and sandbox runtime dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl ca-certificates gnupg git \
+        ripgrep bubblewrap socat libfuse2 build-essential && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/root/.local/bin:$PATH"
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+
+WORKDIR /app
+
+# ============================================
+# Layer 1: Install dependencies (cached)
+# ============================================
+
+COPY bot/pyproject.toml ./
+RUN mkdir -p vikingbot
+COPY bot/bridge/package*.json ./bridge/
+
+ENV UV_HTTP_TIMEOUT=300
+RUN uv pip install --system --no-cache "openviking>=0.1.18" && \
+    uv pip install --system --no-cache .
+
+RUN npm install -g @anthropic-ai/sandbox-runtime
+
+# ============================================
+# Layer 2: Copy source and build
+# ============================================
+
+COPY bot/vikingbot/ vikingbot/
+COPY bot/README.md ./
+COPY bot/license/LICENSE ./LICENSE
+COPY bot/bridge/ bridge/
+
+RUN uv pip install --system --no-cache .
+
+WORKDIR /app/bridge
+RUN npm install && npm run build
+WORKDIR /app
+
+RUN mkdir -p /root/.openviking /root/.openviking/data \
+             /root/.openviking/sandboxes /root/.openviking/bridge
+
+RUN cp -r /app/bridge/* /root/.openviking/bridge/ && \
+    cd /root/.openviking/bridge && \
+    npm install --omit=dev
+
+# ============================================
+# Entrypoint: generate ov.conf from env vars
+# ============================================
+
+COPY docker-entrypoint-bot.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+EXPOSE 18791 18790
+
+ENV PYTHONUNBUFFERED=1
+ENV NODE_ENV=production
+ENV OPENVIKING_CONFIG_FILE=/root/.openviking/ov.conf
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["vikingbot", "gateway"]
