@@ -2,14 +2,13 @@
 set -e
 
 # Generate /app/ov.conf from environment variables at container startup.
-# This keeps secrets out of the image and makes Zeabur env-var configuration work.
+# Both VLM and Embedding use OpenRouter - only one API key needed.
 
 : "${OV_OPENROUTER_API_KEY:?OV_OPENROUTER_API_KEY is required}"
-: "${OV_OPENAI_API_KEY:?OV_OPENAI_API_KEY is required (used for embeddings)}"
 : "${OV_ROOT_API_KEY:?OV_ROOT_API_KEY is required}"
 
 VLM_MODEL="${OV_VLM_MODEL:-anthropic/claude-3.5-sonnet}"
-EMBEDDING_MODEL="${OV_EMBEDDING_MODEL:-text-embedding-3-large}"
+EMBEDDING_MODEL="${OV_EMBEDDING_MODEL:-openai/text-embedding-3-large}"
 EMBEDDING_DIM="${OV_EMBEDDING_DIMENSION:-3072}"
 
 mkdir -p /app/data
@@ -38,8 +37,8 @@ cat > /app/ov.conf << CONF
   "embedding": {
     "dense": {
       "provider": "openai",
-      "api_base": "https://api.openai.com/v1",
-      "api_key": "${OV_OPENAI_API_KEY}",
+      "api_base": "https://openrouter.ai/api/v1",
+      "api_key": "${OV_OPENROUTER_API_KEY}",
       "model": "${EMBEDDING_MODEL}",
       "dimension": ${EMBEDDING_DIM}
     },
